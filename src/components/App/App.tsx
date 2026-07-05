@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { fetchNotes, deleteNote, createNote } from "../../services/noteService";
-import type { CreateNoteParams } from "../../services/noteService";
+import { useQuery } from "@tanstack/react-query";
+import { fetchNotes } from "../../services/noteService";
+import { keepPreviousData } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
 import ErrorMessage from "../ErrorMessage/ErrorMessage";
 import EmptyState from "../EmptyState/EmptyState";
@@ -19,33 +19,23 @@ function App() {
   const [debouncedSearch, setDebouncedSearch] = useState<string>("");
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const perPage = 12;
-  const queryClient = useQueryClient();
 
   const changeSearchDebounced = useDebouncedCallback((value: string) => {
     setDebouncedSearch(value);
     setPage(1);
   }, 1000);
+
   const handleSearchChange = (value: string) => {
     setSearch(value);
     changeSearchDebounced(value);
   };
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ["notes", page, debouncedSearch],
     queryFn: () => fetchNotes({ page, search: debouncedSearch, perPage }),
+    placeholderData: keepPreviousData,
   });
-  const { mutate: deleteNoteMutation } = useMutation({
-    mutationFn: (id: string) => deleteNote(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notes"] });
-    },
-  });
-  const { mutate: createNoteMutation } = useMutation({
-    mutationFn: (newNote: CreateNoteParams) => createNote(newNote),
-    onSuccess: () => {
-      setPage(1);
-      queryClient.invalidateQueries({ queryKey: ["notes"] });
-    },
-  });
+
   return (
     <div className={css.app}>
       <header className={css.toolbar}>
@@ -61,7 +51,9 @@ function App() {
           Create note +
         </button>
       </header>
+
       {isLoading && <Loader />}
+
       {isError && (
         <ErrorMessage message="Error loading notes! Please try again later." />
       )}
@@ -69,18 +61,12 @@ function App() {
       {!isLoading && !isError && data?.notes.length === 0 && (
         <EmptyState message="No notes found. Create one!" />
       )}
-      {!isLoading && !isError && (
-        <NoteList items={data?.notes ?? []} onDelete={deleteNoteMutation} />
-      )}
+
+      {!isLoading && !isError && <NoteList items={data?.notes ?? []} />}
+
       {isModalOpen && (
         <Modal onClose={() => setIsModalOpen(false)}>
-          <NoteForm
-            onSubmit={(values) => {
-              createNoteMutation(values);
-              setIsModalOpen(false);
-            }}
-            onCancel={() => setIsModalOpen(false)}
-          />
+          <NoteForm onClose={() => setIsModalOpen(false)} />
         </Modal>
       )}
     </div>
